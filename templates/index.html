@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hammer Drill Tracker</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script>
+        let videoStream;
+        let mediaStream;
+        let ws;
+        const FPS = 30;
+        let videoElement;
+        let canvasElement;
+        let canvasCtx;
+        let isStreaming = false;
+
+        async function startWebcam() {
+            try {
+                videoElement = document.createElement('video');
+                canvasElement = document.createElement('canvas');
+                canvasCtx = canvasElement.getContext('2d');
+                
+                mediaStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                videoElement.srcObject = mediaStream;
+                videoElement.play();
+
+                // Set canvas size to match video
+                videoElement.onloadedmetadata = () => {
+                    canvasElement.width = videoElement.videoWidth;
+                    canvasElement.height = videoElement.videoHeight;
+                };
+
+                // Setup WebSocket connection
+                ws = new WebSocket(`ws://${window.location.host}/ws`);
+                ws.onmessage = handleWebSocketMessage;
+
+                // Start streaming
+                isStreaming = true;
+                streamVideo();
+
+                // Update UI
+                document.getElementById('video-stream').style.display = 'block';
+                document.getElementById('start-webcam').style.display = 'none';
+                document.getElementById('start-video').style.display = 'none';
+                document.getElementById('close-button').style.display = 'inline-block';
+            } catch (err) {
+                console.error('Error accessing webcam:', err);
+                alert('Error accessing webcam. Please make sure you have granted camera permissions.');
+            }
+        }
+
+        function streamVideo() {
+            if (!isStreaming) return;
+
+            // Draw current video frame to canvas
+            canvasCtx.drawImage(videoElement, 0, 0);
+            
+            // Convert canvas to blob and send via WebSocket
+            canvasElement.toBlob(blob => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(blob);
+                }
+            }, 'image/jpeg', 0.8);
+
+            // Schedule next frame
+            setTimeout(() => requestAnimationFrame(streamVideo), 1000 / FPS);
+        }
+
+        function handleWebSocketMessage(event) {
+            // Display processed frame
+            const processed_image = document.getElementById('video-stream');
+            processed_image.src = URL.createObjectURL(event.data);
+        }
+
+        function startVideo() {
+            videoStream = document.getElementById('video-stream');
+            videoStream.src = '/video_feed';
+            videoStream.style.display = 'block';
+            document.getElementById('start-webcam').style.display = 'none';
+            document.getElementById('start-video').style.display = 'none';
+            document.getElementById('close-button').style.display = 'inline-block';
+        }
+
+        function closeStream() {
+            isStreaming = false;
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+            if (ws) {
+                ws.close();
+            }
+            if (videoStream) {
+                videoStream.src = '';
+                videoStream.style.display = 'none';
+            }
+            document.getElementById('start-webcam').style.display = 'inline-block';
+            document.getElementById('start-video').style.display = 'inline-block';
+            document.getElementById('close-button').style.display = 'none';
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Hammer Drill Tracker</h1>
+        
+        <div class="button-container">
+            <button id="start-webcam" onclick="startWebcam()">Start Webcam</button>
+            <button id="start-video" onclick="startVideo()">Start Video</button>
+            <button id="close-button" onclick="closeStream()" style="display: none;">Close</button>
+        </div>
+
+        <form action="/upload" method="POST" enctype="multipart/form-data" style="margin-top: 20px;">
+            <label for="video">Upload Video:</label>
+            <input type="file" name="video" id="video" accept="video/*" required>
+            <button type="submit">Upload and Play</button>
+        </form>
+
+        <div class="x" style="display: flex;justify-content: center;align-items: center; width: 100%; margin-top: 20px;">
+            <div class="video-container">
+                <img id="video-stream" alt="Golf Ball Tracking" style="display: none;">
+            </div>
+        </div>
+    </div>
+</body>
+</html>
