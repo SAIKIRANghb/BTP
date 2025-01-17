@@ -16,43 +16,41 @@
         let isStreaming = false;
 
         async function startWebcam() {
-    try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            alert("Your device does not support camera access.");
-            return;
+            try {
+                videoElement = document.createElement('video');
+                canvasElement = document.createElement('canvas');
+                canvasCtx = canvasElement.getContext('2d');
+                
+                mediaStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                videoElement.srcObject = mediaStream;
+                videoElement.play();
+
+                // Set canvas size to match video
+                videoElement.onloadedmetadata = () => {
+                    canvasElement.width = videoElement.videoWidth;
+                    canvasElement.height = videoElement.videoHeight;
+                };
+
+                // Setup WebSocket connection
+                ws = new WebSocket(`wss://btp-lwgk.onrender.com/ws`); 
+                ws.onmessage = handleWebSocketMessage;
+
+                // Start streaming
+                isStreaming = true;
+                streamVideo();
+
+                // Update UI
+                document.getElementById('video-stream').style.display = 'block';
+                document.getElementById('start-webcam').style.display = 'none';
+                document.getElementById('start-video').style.display = 'none';
+                document.getElementById('close-button').style.display = 'inline-block';
+            } catch (err) {
+                console.error('Error accessing webcam:', err);
+                alert('Error accessing webcam. Please make sure you have granted camera permissions.');
+            }
         }
-
-        videoElement = document.createElement('video');
-        canvasElement = document.createElement('canvas');
-        canvasCtx = canvasElement.getContext('2d');
-
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-            video: { width: 640, height: 480 }
-        });
-        videoElement.srcObject = mediaStream;
-        videoElement.play();
-
-        videoElement.onloadedmetadata = () => {
-            canvasElement.width = videoElement.videoWidth;
-            canvasElement.height = videoElement.videoHeight;
-        };
-
-        // Use wss:// for secure WebSocket connection
-        ws = new WebSocket(`wss://${window.location.host}/ws`);
-        ws.onmessage = handleWebSocketMessage;
-
-        isStreaming = true;
-        streamVideo();
-
-        document.getElementById('video-stream').style.display = 'block';
-        document.getElementById('start-webcam').style.display = 'none';
-        document.getElementById('start-video').style.display = 'none';
-        document.getElementById('close-button').style.display = 'inline-block';
-    } catch (err) {
-        console.error('Error accessing webcam:', err);
-        alert('Error accessing webcam. Please make sure you have granted camera permissions.');
-    }
-}
 
         function streamVideo() {
             if (!isStreaming) return;
